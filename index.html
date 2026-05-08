@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Boga Bible - Full List View</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/projectnoonnu/noonfonts_twelve@1.1/RIDIBatang.css">
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <style>
+        :root {
+            --sidebar-gradient: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            --primary: #4facfe; --accent: #ff7e5f; --hymn-green: #27ae60;
+            --bible-font: 'RIDIBatang', serif; --ui-font: 'Pretendard', sans-serif;
+        }
+        * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+        body { margin: 0; font-family: var(--ui-font); background: #f0f2f5; display: flex; height: 100vh; overflow: hidden; padding: 10px; }
+        #app-container { flex: 1; display: flex; background: rgba(255,255,255,0.98); border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); overflow: hidden; }
+        
+        /* 좌측 사이드바 */
+        aside#nav-sidebar { width: 260px; background: var(--sidebar-gradient); display: flex; flex-direction: column; color: white; }
+        .nav-header { padding: 20px; font-weight: 800; font-size: 1.1rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .split-nav { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+        .book-section { height: 55%; overflow-y: auto; padding: 10px; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .chapter-section { height: 45%; overflow-y: auto; padding: 10px; }
+        .book-btn { padding: 10px; border-radius: 8px; cursor: pointer; margin-bottom: 2px; font-size: 0.9rem; display: flex; justify-content: space-between; }
+        .book-btn.active { background: white; color: #1e3c72; font-weight: 700; }
+        .chapter-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; }
+        .chap-box { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.1); border-radius: 5px; cursor: pointer; font-size: 0.8rem; }
+        .chap-box.active { background: var(--accent); color: white; }
+
+        /* 중앙 성경 본문 (줄간격 최적화) */
+        main#reading-area { flex: 1; display: flex; flex-direction: column; background: white; border-right: 1px solid #eee; }
+        header { height: 60px; border-bottom: 1px solid #eee; display: flex; align-items: center; padding: 0 25px; }
+        .bible-viewer { flex: 1; overflow-y: auto; padding: 25px 8%; }
+        .v-line { display: flex; margin-bottom: 6px; font-size: 1.25rem; line-height: 1.4; font-family: var(--bible-font); color: #2c3e50; }
+        .v-num { min-width: 40px; color: var(--primary); font-weight: 800; font-size: 0.9rem; margin-top: 4px; }
+
+        /* 우측 찬송가 목록 영역 */
+        aside#right-dash { width: 450px; background: #f9f9f9; padding: 0; display: flex; flex-direction: column; }
+        
+        /* 통독표 상단 바 */
+        .progress-mini-card { 
+            background: white; padding: 15px; border-bottom: 1px solid #eee; cursor: pointer;
+            display: flex; align-items: center; justify-content: space-between;
+        }
+
+        #hymn-container { flex: 1; display: flex; flex-direction: column; background: #fff; }
+        .hymn-header { background: var(--hymn-green); color: white; padding: 15px; font-weight: bold; font-size: 0.95rem; }
+        
+        /* 블로그 페이지 전체 채우기 */
+        #hymn-full-frame { flex: 1; width: 100%; border: none; }
+
+        /* 모달 (통독표) */
+        .modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); display: none; align-items: center; justify-content: center; z-index: 2000; }
+        .modal-content { background: white; padding: 25px; border-radius: 15px; width: 90%; max-width: 850px; height: 85vh; overflow-y: auto; }
+        .reading-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 5px; }
+        .read-item { padding: 8px; border: 1px solid #eee; border-radius: 5px; font-size: 0.7rem; text-align: center; cursor: pointer; }
+        .read-item.done { background: var(--primary); color: white; }
+    </style>
+</head>
+<body>
+
+<div id="app-container">
+    <aside id="nav-sidebar">
+        <div class="nav-header"><i class="fa-solid fa-bible"></i> BOGA BIBLE</div>
+        <div class="split-nav">
+            <div class="book-section" id="book-list"></div>
+            <div class="chapter-section"><div class="chapter-grid" id="chapter-grid"></div></div>
+        </div>
+    </aside>
+
+    <main id="reading-area">
+        <header><div id="current-loc" style="font-weight:bold; color:var(--primary); font-size: 1.1rem;">말씀을 로드 중...</div></header>
+        <div class="bible-viewer" id="viewer"><div id="render-target"></div></div>
+    </main>
+
+    <aside id="right-dash">
+        <div class="progress-mini-card" onclick="openReadingTable()">
+            <div style="font-weight:bold; font-size:0.85rem;">성경 통독 현황 <span id="progress-text" style="color:var(--primary); margin-left:5px;">0%</span></div>
+            <i class="fa-solid fa-chevron-right" style="color:#ccc; font-size:0.8rem;"></i>
+        </div>
+
+        <div id="hymn-container">
+            <div class="hymn-header"><i class="fa-solid fa-music"></i> 새찬송가 목록 (1-645장)</div>
+            <iframe id="hymn-full-frame" src="https://m.blog.naver.com/csred7/80167470566"></iframe>
+        </div>
+    </aside>
+</div>
+
+<div id="reading-modal" class="modal" onclick="this.style.display='none'">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <h2 style="font-family:'Pretendard'; margin-bottom:20px;">📔 성경 통독표</h2>
+        <div class="reading-grid" id="reading-grid"></div>
+    </div>
+</div>
+
+<script>
+    const BIBLE_JSON = 'my_bible.json';
+    let bibleData = null;
+    let bIdx = 0;
+    const nameMap = {"창":"창세기","출":"출애굽기","레":"레위기","민":"민수기","신":"신명기","수":"여호수아","삿":"사사기","룻":"룻기","삼상":"사무엘상","삼하":"사무엘하","왕상":"열왕기상","왕하":"열왕기하","대상":"역대상","대하":"역대하","스":"에스라","느":"느헤미야","에":"에스더","욥":"욥기","시":"시편","잠":"잠언","전":"전도서","아":"아가","사":"이사야","렘":"예레미야","애":"예레미야애가","겔":"에스겔","단":"단니엘","호":"호세아","욜":"요엘","암":"아모스","옵":"오바댜","요나":"요나","미":"미가","나":"나훔","합":"하박국","습":"스바냐","학":"학개","슥":"스가랴","말":"말라기","마":"마태복음","막":"마가복음","눅":"누가복음","요":"요한복음","행":"사도행전","롬":"로마서","고전":"고린도전서","고후":"고린도후서","갈":"갈라디아서","엡":"에베소서","빌":"빌립보서","골":"골로새서","살전":"데살로니가전서","살후":"데살로니가후서","딤전":"디모데전서","딤후":"디모데후서","딛":"디도서","몬":"빌레몬서","히":"히브리서","야":"야고보서","벧전":"베드로전서","벧후":"베드로후서","요일":"요한일서","요이":"요한이서","요삼":"요한삼서","유":"유다서","계":"요한계시록"};
+
+    async function init() {
+        try {
+            const res = await fetch(BIBLE_JSON);
+            bibleData = await res.json();
+            bibleData = bibleData.map(b => ({...b, full: nameMap[b.book_name] || b.book_name}));
+            renderBooks();
+            loadBook(0);
+            updateProgress();
+        } catch (e) { console.error("JSON 로딩 오류"); }
+    }
+
+    function renderBooks() {
+        const list = document.getElementById('book-list');
+        list.innerHTML = '';
+        bibleData.forEach((b, i) => {
+            const div = document.createElement('div');
+            div.className = 'book-btn';
+            div.innerHTML = `<span>${b.full}</span> <span style="opacity:0.4; font-size:0.7rem;">${b.chapters.length}</span>`;
+            div.onclick = () => loadBook(i);
+            list.appendChild(div);
+        });
+    }
+
+    function loadBook(i) {
+        bIdx = i;
+        document.querySelectorAll('.book-btn').forEach((btn, idx) => btn.classList.toggle('active', idx === i));
+        renderChapters();
+        loadChapter(0);
+    }
+
+    function renderChapters() {
+        const grid = document.getElementById('chapter-grid');
+        grid.innerHTML = '';
+        bibleData[bIdx].chapters.forEach((_, i) => {
+            const div = document.createElement('div');
+            div.className = 'chap-box';
+            div.innerText = (i + 1);
+            div.onclick = () => loadChapter(i);
+            grid.appendChild(div);
+        });
+    }
+
+    function loadChapter(idx) {
+        document.getElementById('current-loc').innerText = `${bibleData[bIdx].full} ${idx + 1}장`;
+        const verses = bibleData[bIdx].chapters[idx];
+        let html = '';
+        verses.forEach((v, i) => {
+            html += `<div class="v-line"><div class="v-num">${i+1}</div><div class="v-txt">${v}</div></div>`;
+        });
+        document.getElementById('render-target').innerHTML = html;
+        document.getElementById('viewer').scrollTop = 0;
+    }
+
+    function openReadingTable() {
+        document.getElementById('reading-modal').style.display = 'flex';
+        const grid = document.getElementById('reading-grid');
+        if(grid.children.length > 0) return;
+        bibleData.forEach((b, bi) => {
+            b.chapters.forEach((_, ci) => {
+                const item = document.createElement('div');
+                item.className = 'read-item';
+                const key = `read_${bi}_${ci}`;
+                if(localStorage.getItem(key)) item.classList.add('done');
+                item.innerText = `${b.full.substring(0,2)} ${ci+1}`;
+                item.onclick = function() {
+                    this.classList.toggle('done');
+                    if(this.classList.contains('done')) localStorage.setItem(key, 'true');
+                    else localStorage.removeItem(key);
+                    updateProgress();
+                };
+                grid.appendChild(item);
+            });
+        });
+    }
+
+    function updateProgress() {
+        const done = Object.keys(localStorage).filter(k => k.startsWith('read_')).length;
+        const total = 1189;
+        const per = Math.round((done / total) * 100);
+        document.getElementById('progress-text').innerText = per + '%';
+    }
+
+    init();
+</script>
+</body>
+</html>
